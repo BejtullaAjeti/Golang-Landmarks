@@ -27,7 +27,6 @@ func GetRegions(c *gin.Context) {
 	db.DB.Find(&regions)
 
 	c.JSON(200, regions)
-	//c.JSON(201, gin.H{"output": "Hello World!"})
 }
 
 // GetRegionByID returns a region by ID
