@@ -14,6 +14,11 @@ func CreateLandmark(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid landmark data"})
 		return
 	}
+	var city models.City
+	if err := db.DB.First(&city, landmark.CityID).Error; err != nil {
+		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
+		return
+	}
 
 	db.DB.Create(&landmark)
 
@@ -52,6 +57,11 @@ func UpdateLandmark(c *gin.Context) {
 
 	if err := c.BindJSON(&landmark); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid landmark data"})
+		return
+	}
+	var city models.City
+	if err := db.DB.First(&city, landmark.CityID).Error; err != nil {
+		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
 		return
 	}
 
@@ -139,6 +149,14 @@ func GetAllLandmarksOfCity(c *gin.Context) {
 	var landmarks []models.Landmark
 	cityID := c.Param("city_id")
 
+	// Check if the city with the specified city_id exists
+	var city models.City
+	if err := db.DB.First(&city, cityID).Error; err != nil {
+		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
+		return
+	}
+
+	// City with the specified city_id exists, proceed to fetch all landmarks of the city
 	db.DB.Where("city_id = ?", cityID).Find(&landmarks)
 
 	c.JSON(200, landmarks)
@@ -149,6 +167,14 @@ func GetAllLandmarksOfRegion(c *gin.Context) {
 	var landmarks []models.Landmark
 	regionID := c.Param("region_id")
 
+	// Check if the region with the specified region_id exists
+	var region models.Region
+	if err := db.DB.First(&region, regionID).Error; err != nil {
+		c.JSON(400, gin.H{"error": "Region with the specified region_id does not exist"})
+		return
+	}
+
+	// Region with the specified region_id exists, proceed to fetch all landmarks of the region
 	db.DB.Joins("JOIN cities ON landmarks.city_id = cities.id").
 		Where("cities.region_id = ?", regionID).
 		Find(&landmarks)

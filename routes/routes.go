@@ -2,6 +2,7 @@ package routes
 
 import (
 	"landmarksmodule/handlers"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,11 +36,23 @@ func SetupRoutes() {
 	router.GET("/landmarks/:id", handlers.GetLandmarkByID)
 	router.PUT("/landmarks/:id", handlers.UpdateLandmark)
 	router.DELETE("/landmarks/:id", handlers.DeleteLandmark)
+	router.GET("/landmarks/:id/average-rating", handlers.GetAverageRatingByLandmarkID)
 	router.GET("/landmarks/search", handlers.SearchLandmarks)
 	router.GET("/landmarks/filter", handlers.FilterLandmarks)
 	router.GET("/landmarks/city/:city_id", handlers.GetAllLandmarksOfCity)
 	router.GET("landmarks/region/:region_id", handlers.GetAllLandmarksOfRegion)
 
+	//Review endpoints
+	router.GET("/reviews", handlers.GetReviews)
+	router.POST("/reviews", handlers.CreateReview)
+	router.GET("/reviews/:id", handlers.GetReviewByID)
+	router.PUT("/reviews/:id", handlers.UpdateReview)
+	router.DELETE("/reviews/:id", handlers.DeleteReview)
+	router.GET("/reviews/user/:uuid", handlers.GetReviewsByUUID)
+
 	// Start server
-	router.Run(":8080")
+	err := router.Run(":8080")
+	if err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

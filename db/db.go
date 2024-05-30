@@ -26,8 +26,9 @@ func Init() {
 }
 
 func migrate() {
-	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{})
+	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{}, &models.Review{})
 	DB.Model(&models.City{}).AddForeignKey("region_id", "regions(id)", "RESTRICT", "RESTRICT")
 	DB.Model(&models.Landmark{}).AddForeignKey("city_id", "cities(id)", "RESTRICT", "RESTRICT")
+	DB.Model(&models.Review{}).AddForeignKey("landmark_id", "landmarks(id)", "RESTRICT", "RESTRICT")
 	fmt.Println("Database migrated successfully")
 }

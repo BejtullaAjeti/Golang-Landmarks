@@ -13,7 +13,13 @@ func CreateCity(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid city data"})
 		return
 	}
+	var region models.Region
 
+	// Retrieve the region associated with the city's region_id
+	if err := db.DB.First(&region, city.RegionID).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Region not found"})
+		return
+	}
 	db.DB.Create(&city)
 
 	c.JSON(201, city)
@@ -50,6 +56,14 @@ func UpdateCity(c *gin.Context) {
 
 	if err := c.BindJSON(&city); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid city data"})
+		return
+	}
+
+	var region models.Region
+
+	// Retrieve the region associated with the city's region_id
+	if err := db.DB.First(&region, city.RegionID).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Region not found"})
 		return
 	}
 
