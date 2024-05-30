@@ -45,6 +45,8 @@ func CreateReview(c *gin.Context) {
 
 	// Return the created review
 	c.JSON(http.StatusCreated, review)
+
+	db.DB.Create(&review)
 }
 
 // GetReviews returns all reviews
