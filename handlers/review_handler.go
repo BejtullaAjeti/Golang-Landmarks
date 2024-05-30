@@ -144,16 +144,16 @@ func GetReviewsByDeviceID(c *gin.Context) {
 	var reviews []models.Review
 
 	// Get the device ID from the request parameter
-	uuid := c.Param("device_id")
+	deviceID := c.Param("device_id")
 
 	// Check if the device ID exists
-	if uuid == "" {
+	if deviceID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Device ID is required"})
 		return
 	}
 
 	// Query the database for reviews with the specified device ID
-	db.DB.Where("uuid = ?", uuid).Find(&reviews)
+	db.DB.Where("device_id = ?", deviceID).Find(&reviews)
 
 	// Return the reviews in the response
 	c.JSON(http.StatusOK, reviews)
