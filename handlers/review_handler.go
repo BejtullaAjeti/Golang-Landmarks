@@ -11,12 +11,39 @@ import (
 // CreateReview handles creating a new review
 func CreateReview(c *gin.Context) {
 	var review models.Review
+
+	// Bind the JSON request body to the review struct
 	if err := c.BindJSON(&review); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
 		return
 	}
 
-	db.DB.Create(&review)
+	// Check if rating is between 1 and 5
+	if review.Rating < 1 || review.Rating > 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Rating must be between 1 and 5"})
+		return
+	}
+
+	// Check if device ID is not empty
+	if review.DeviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Device ID cannot be empty"})
+		return
+	}
+
+	// Check if landmark ID exists
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, review.LandmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
+
+	// Create the review in the database
+	if err := db.DB.Create(&review).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review"})
+		return
+	}
+
+	// Return the created review
 	c.JSON(http.StatusCreated, review)
 }
 
@@ -55,6 +82,15 @@ func UpdateReview(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
 		return
 	}
+	if review.Rating < 1 || review.Rating > 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Rating must be between 1 and 5"})
+		return
+	}
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, review.LandmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
 
 	db.DB.Save(&review)
 	c.JSON(http.StatusOK, review)
@@ -81,6 +117,13 @@ func GetAverageRatingByLandmarkID(c *gin.Context) {
 	}
 	landmarkID := c.Param("id")
 
+	// Check if the landmark ID exists
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
+
 	err := db.DB.Model(&models.Review{}).
 		Select("AVG(rating) as average_rating").
 		Where("landmark_id = ?", landmarkID).
@@ -97,8 +140,19 @@ func GetAverageRatingByLandmarkID(c *gin.Context) {
 // GetReviewsByDeviceID retrieves all reviews by a user based on their UUID
 func GetReviewsByDeviceID(c *gin.Context) {
 	var reviews []models.Review
+
+	// Get the device ID from the request parameter
 	uuid := c.Param("device_id")
 
-	db.DB.Where("device_id = ?", uuid).Find(&reviews)
+	// Check if the device ID exists
+	if uuid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Device ID is required"})
+		return
+	}
+
+	// Query the database for reviews with the specified device ID
+	db.DB.Where("uuid = ?", uuid).Find(&reviews)
+
+	// Return the reviews in the response
 	c.JSON(http.StatusOK, reviews)
 }
