@@ -6,7 +6,7 @@ import (
 
 type Review struct {
 	gorm.Model
-	UUID       string `gorm:"not null;index" json:"uuid"`
+	DeviceID   string `gorm:"not null;index" json:"device_id"`
 	Name       string `gorm:"not null" json:"name"`
 	Comment    string `gorm:"type:text" json:"comment"`
 	Rating     int    `gorm:"not null;check:rating >= 1 AND rating <= 5" json:"rating"`

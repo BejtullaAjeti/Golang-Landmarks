@@ -48,7 +48,7 @@ func SetupRoutes() {
 	router.GET("/reviews/:id", handlers.GetReviewByID)
 	router.PUT("/reviews/:id", handlers.UpdateReview)
 	router.DELETE("/reviews/:id", handlers.DeleteReview)
-	router.GET("/reviews/user/:uuid", handlers.GetReviewsByUUID)
+	router.GET("/reviews/user/:device_id", handlers.GetReviewsByDeviceID)
 
 	// Start server
 	err := router.Run(":8080")

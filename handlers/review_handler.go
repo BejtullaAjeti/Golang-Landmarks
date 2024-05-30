@@ -94,11 +94,11 @@ func GetAverageRatingByLandmarkID(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// GetReviewsByUUID retrieves all reviews by a user based on their UUID
-func GetReviewsByUUID(c *gin.Context) {
+// GetReviewsByDeviceID retrieves all reviews by a user based on their UUID
+func GetReviewsByDeviceID(c *gin.Context) {
 	var reviews []models.Review
-	uuid := c.Param("uuid")
+	uuid := c.Param("device_id")
 
-	db.DB.Where("uuid = ?", uuid).Find(&reviews)
+	db.DB.Where("device_id = ?", uuid).Find(&reviews)
 	c.JSON(http.StatusOK, reviews)
 }
