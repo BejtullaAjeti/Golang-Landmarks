@@ -70,6 +70,97 @@ func GetReviewByID(c *gin.Context) {
 	c.JSON(http.StatusOK, review)
 }
 
+// GetReviewsByLandmarkID retrieves all reviews for a specific landmark based on its ID
+func GetReviewsByLandmarkID(c *gin.Context) {
+	var reviews []models.Review
+	landmarkID := c.Param("id")
+
+	// Check if the landmark ID exists
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
+
+	// Retrieve all reviews for the specified landmark
+	if err := db.DB.Where("landmark_id = ?", landmarkID).Find(&reviews).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews"})
+		return
+	}
+
+	// Return the reviews in the response
+	c.JSON(http.StatusOK, reviews)
+}
+
+// GetReviewCountByLandmarkID retrieves the count of reviews for a specific landmark based on its ID
+func GetReviewCountByLandmarkID(c *gin.Context) {
+	var count int64
+	landmarkID := c.Param("id")
+
+	// Check if the landmark ID exists
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
+
+	// Count the reviews for the specified landmark
+	if err := db.DB.Model(&models.Review{}).Where("landmark_id = ?", landmarkID).Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count reviews"})
+		return
+	}
+
+	// Return the count in the response
+	c.JSON(http.StatusOK, gin.H{"review_count": count})
+}
+
+// GetAverageRatingByLandmarkID calculates the average rating for a specific landmark
+func GetAverageRatingByLandmarkID(c *gin.Context) {
+	var result struct {
+		AverageRating float64 `json:"average_rating"`
+	}
+	landmarkID := c.Param("id")
+
+	// Check if the landmark ID exists
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
+		return
+	}
+
+	err := db.DB.Model(&models.Review{}).
+		Select("AVG(rating) as average_rating").
+		Where("landmark_id = ?", landmarkID).
+		Scan(&result).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate average rating"})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetReviewsByDeviceID retrieves all reviews by a user based on their DeviceID
+func GetReviewsByDeviceID(c *gin.Context) {
+	var reviews []models.Review
+
+	// Get the device ID from the request parameter
+	deviceID := c.Param("device_id")
+
+	// Check if the device ID exists
+	if deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Device ID is required"})
+		return
+	}
+
+	// Query the database for reviews with the specified device ID
+	db.DB.Where("device_id = ?", deviceID).Find(&reviews)
+
+	// Return the reviews in the response
+	c.JSON(http.StatusOK, reviews)
+}
+
 // UpdateReview updates a review by ID
 func UpdateReview(c *gin.Context) {
 	var review models.Review
@@ -110,51 +201,4 @@ func DeleteReview(c *gin.Context) {
 
 	db.DB.Delete(&review)
 	c.Status(http.StatusNoContent)
-}
-
-// GetAverageRatingByLandmarkID calculates the average rating for a specific landmark
-func GetAverageRatingByLandmarkID(c *gin.Context) {
-	var result struct {
-		AverageRating float64 `json:"average_rating"`
-	}
-	landmarkID := c.Param("id")
-
-	// Check if the landmark ID exists
-	var landmark models.Landmark
-	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark ID does not exist"})
-		return
-	}
-
-	err := db.DB.Model(&models.Review{}).
-		Select("AVG(rating) as average_rating").
-		Where("landmark_id = ?", landmarkID).
-		Scan(&result).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate average rating"})
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
-}
-
-// GetReviewsByDeviceID retrieves all reviews by a user based on their UUID
-func GetReviewsByDeviceID(c *gin.Context) {
-	var reviews []models.Review
-
-	// Get the device ID from the request parameter
-	deviceID := c.Param("device_id")
-
-	// Check if the device ID exists
-	if deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Device ID is required"})
-		return
-	}
-
-	// Query the database for reviews with the specified device ID
-	db.DB.Where("device_id = ?", deviceID).Find(&reviews)
-
-	// Return the reviews in the response
-	c.JSON(http.StatusOK, reviews)
 }

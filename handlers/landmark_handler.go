@@ -4,6 +4,7 @@ import (
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,6 +45,69 @@ func GetLandmarkByID(c *gin.Context) {
 		return
 	}
 	c.JSON(200, landmark)
+}
+
+func GetLandmarkDetails(c *gin.Context) {
+	var (
+		landmark      models.Landmark
+		reviews       []models.Review
+		reviewCount   int64
+		averageRating float64
+		userReview    models.Review // User review for the landmark
+	)
+
+	landmarkID := c.Param("id")
+	deviceID := c.Query("device_id") // Get device ID from query parameter
+
+	log.Printf("Fetching details for landmark with ID: %s", landmarkID)
+
+	// Fetch Landmark
+	if err := db.DB.First(&landmark, landmarkID).Error; err != nil {
+		log.Println("Landmark not found or an error occurred:", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Landmark not found"})
+		return
+	}
+
+	// Fetch Reviews
+	db.DB.Where("landmark_id = ?", landmarkID).Find(&reviews)
+
+	// Fetch Review Count
+	db.DB.Model(&models.Review{}).Where("landmark_id = ?", landmarkID).Count(&reviewCount)
+
+	// Fetch Average Rating
+	var result struct {
+		AverageRating float64
+	}
+	db.DB.Model(&models.Review{}).
+		Select("AVG(rating) as average_rating").
+		Where("landmark_id = ?", landmarkID).
+		Scan(&result)
+	averageRating = result.AverageRating
+
+	// If device ID is provided, fetch reviews by device ID for the landmark
+	if deviceID != "" {
+		var userReviews []models.Review
+		db.DB.Where("landmark_id = ? AND device_id = ?", landmarkID, deviceID).Find(&userReviews)
+		if len(userReviews) > 0 {
+			userReview = userReviews[0] // Assuming there's only one review per user for a landmark
+		}
+	}
+
+	// Construct JSON response
+	response := gin.H{
+		"landmark":       landmark,
+		"reviews":        reviews,
+		"review_count":   reviewCount,
+		"average_rating": averageRating,
+	}
+
+	// Include the user's review only if device ID is provided
+	if deviceID != "" {
+		response["user_review"] = userReview
+	}
+
+	// Send JSON response
+	c.JSON(http.StatusOK, response)
 }
 
 func UpdateLandmark(c *gin.Context) {
