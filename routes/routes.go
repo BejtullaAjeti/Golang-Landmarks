@@ -17,6 +17,7 @@ func SetupRoutes() {
 	router.GET("/regions/:id", handlers.GetRegionByID)
 	router.PUT("/regions/:id", handlers.UpdateRegion)
 	router.DELETE("/regions/:id", handlers.DeleteRegion)
+	router.POST("/regions/:id/geojsonfile", handlers.CreateGeoJSONFile)
 	router.GET("/regions/search", handlers.SearchRegions)
 	router.GET("/regions/filter", handlers.FilterRegions)
 
