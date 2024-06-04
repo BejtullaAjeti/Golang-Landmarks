@@ -3,6 +3,7 @@ package handlers
 import (
 	"landmarksmodule/db"
 	"landmarksmodule/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,26 +11,26 @@ import (
 func CreateCity(c *gin.Context) {
 	var city models.City
 	if err := c.BindJSON(&city); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid city data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid city data"})
 		return
 	}
 	var region models.Region
 
 	// Retrieve the region associated with the city's region_id
 	if err := db.DB.First(&region, city.RegionID).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Region not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Region not found"})
 		return
 	}
 	db.DB.Create(&city)
 
-	c.JSON(201, city)
+	c.JSON(http.StatusCreated, city)
 }
 
 func GetCities(c *gin.Context) {
 	var cities []models.City
 	db.DB.Find(&cities)
 
-	c.JSON(200, cities)
+	c.JSON(http.StatusOK, cities)
 }
 
 func GetCityByID(c *gin.Context) {
@@ -38,11 +39,11 @@ func GetCityByID(c *gin.Context) {
 	db.DB.First(&city, id)
 
 	if city.ID == 0 {
-		c.JSON(404, gin.H{"error": "City not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "City not found"})
 		return
 	}
 
-	c.JSON(200, city)
+	c.JSON(http.StatusOK, city)
 }
 
 func UpdateCity(c *gin.Context) {
@@ -50,12 +51,12 @@ func UpdateCity(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := db.DB.First(&city, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "City not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "City not found"})
 		return
 	}
 
 	if err := c.BindJSON(&city); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid city data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid city data"})
 		return
 	}
 
@@ -63,13 +64,13 @@ func UpdateCity(c *gin.Context) {
 
 	// Retrieve the region associated with the city's region_id
 	if err := db.DB.First(&region, city.RegionID).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Region not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Region not found"})
 		return
 	}
 
 	db.DB.Save(&city)
 
-	c.JSON(200, city)
+	c.JSON(http.StatusOK, city)
 }
 
 func DeleteCity(c *gin.Context) {
@@ -77,13 +78,13 @@ func DeleteCity(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := db.DB.First(&city, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "City not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "City not found"})
 		return
 	}
 
 	db.DB.Delete(&city)
 
-	c.Status(204)
+	c.Status(http.StatusNoContent)
 }
 
 func SearchCities(c *gin.Context) {
@@ -97,7 +98,7 @@ func SearchCities(c *gin.Context) {
 		db.DB.Find(&cities)
 	}
 
-	c.JSON(200, cities)
+	c.JSON(http.StatusOK, cities)
 }
 
 func FilterCities(c *gin.Context) {
@@ -138,11 +139,11 @@ func FilterCities(c *gin.Context) {
 	}
 
 	if err := query.Find(&cities).Error; err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(200, cities)
+	c.JSON(http.StatusOK, cities)
 }
 
 // GetRegionOfCity retrieves the region associated with a city by its region_id
@@ -152,7 +153,7 @@ func GetRegionOfCity(c *gin.Context) {
 
 	// Retrieve the city from the database
 	if err := db.DB.First(&city, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "City not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "City not found"})
 		return
 	}
 
@@ -160,9 +161,9 @@ func GetRegionOfCity(c *gin.Context) {
 
 	// Retrieve the region associated with the city's region_id
 	if err := db.DB.First(&region, city.RegionID).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Region not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Region not found"})
 		return
 	}
 
-	c.JSON(200, region)
+	c.JSON(http.StatusOK, region)
 }

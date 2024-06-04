@@ -12,39 +12,39 @@ import (
 func CreateLandmark(c *gin.Context) {
 	var landmark models.Landmark
 	if err := c.BindJSON(&landmark); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid landmark data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid landmark data"})
 		return
 	}
 	var city models.City
 	if err := db.DB.First(&city, landmark.CityID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "City with the specified city_id does not exist"})
 		return
 	}
 
 	db.DB.Create(&landmark)
 
-	c.JSON(201, landmark)
+	c.JSON(http.StatusCreated, landmark)
 }
 
 func GetLandmarks(c *gin.Context) {
 	var landmarks []models.Landmark
 	db.DB.Find(&landmarks)
 
-	c.JSON(200, landmarks)
+	c.JSON(http.StatusOK, landmarks)
 }
 
 func GetLandmarkByID(c *gin.Context) {
 	var landmark models.Landmark
 	id := c.Param("id")
-	log.Printf("Fetching landmark with ID: %s", id) // Add logging
+	log.Printf("Fetching landmark with ID: %s", id)
 	db.DB.First(&landmark, id)
 
 	if landmark.ID == 0 {
-		log.Println("Landmark not found") // Add logging
-		c.JSON(404, gin.H{"error": "Landmark not found"})
+		log.Println("Landmark not found")
+		c.JSON(http.StatusNotFound, gin.H{"error": "Landmark not found"})
 		return
 	}
-	c.JSON(200, landmark)
+	c.JSON(http.StatusOK, landmark)
 }
 
 func GetLandmarkDetails(c *gin.Context) {
@@ -109,29 +109,28 @@ func GetLandmarkDetails(c *gin.Context) {
 	// Send JSON response
 	c.JSON(http.StatusOK, response)
 }
-
 func UpdateLandmark(c *gin.Context) {
 	var landmark models.Landmark
 	id := c.Param("id")
 
 	if err := db.DB.First(&landmark, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "Landmark not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Landmark not found"})
 		return
 	}
 
 	if err := c.BindJSON(&landmark); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid landmark data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid landmark data"})
 		return
 	}
 	var city models.City
 	if err := db.DB.First(&city, landmark.CityID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "City with the specified city_id does not exist"})
 		return
 	}
 
 	db.DB.Save(&landmark)
 
-	c.JSON(200, landmark)
+	c.JSON(http.StatusOK, landmark)
 }
 
 func DeleteLandmark(c *gin.Context) {
@@ -139,16 +138,15 @@ func DeleteLandmark(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := db.DB.First(&landmark, id).Error; err != nil {
-		c.JSON(404, gin.H{"error": "landmark not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "landmark not found"})
 		return
 	}
 
 	db.DB.Delete(&landmark)
 
-	c.Status(204)
+	c.Status(http.StatusNoContent)
 }
 
-// SearchLandmarks searches for landmarks based on a keyword
 func SearchLandmarks(c *gin.Context) {
 	var landmarks []models.Landmark
 	keyword := c.Query("keyword")
@@ -157,10 +155,9 @@ func SearchLandmarks(c *gin.Context) {
 		Or("description LIKE ?", "%"+keyword+"%").
 		Find(&landmarks)
 
-	c.JSON(200, landmarks)
+	c.JSON(http.StatusOK, landmarks)
 }
 
-// FilterLandmarks handles filtering landmarks based on city ID or type
 func FilterLandmarks(c *gin.Context) {
 	var landmarks []models.Landmark
 	var err error
@@ -196,52 +193,46 @@ func FilterLandmarks(c *gin.Context) {
 	err = query.Find(&landmarks).Error
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to retrieve landmarks"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve landmarks"})
 		return
 	}
 
 	if len(landmarks) == 0 {
-		c.JSON(404, gin.H{"message": "No landmarks found"})
+		c.JSON(http.StatusNotFound, gin.H{"message": "No landmarks found"})
 		return
 	}
 
-	c.JSON(200, landmarks)
+	c.JSON(http.StatusOK, landmarks)
 }
 
-// GetAllLandmarksOfCity retrieves all landmarks belonging to a specific city
 func GetAllLandmarksOfCity(c *gin.Context) {
 	var landmarks []models.Landmark
 	cityID := c.Param("city_id")
 
-	// Check if the city with the specified city_id exists
 	var city models.City
 	if err := db.DB.First(&city, cityID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "City with the specified city_id does not exist"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "City with the specified city_id does not exist"})
 		return
 	}
 
-	// City with the specified city_id exists, proceed to fetch all landmarks of the city
 	db.DB.Where("city_id = ?", cityID).Find(&landmarks)
 
-	c.JSON(200, landmarks)
+	c.JSON(http.StatusOK, landmarks)
 }
 
-// GetAllLandmarksOfRegion retrieves all landmarks belonging to a specific region
 func GetAllLandmarksOfRegion(c *gin.Context) {
 	var landmarks []models.Landmark
 	regionID := c.Param("region_id")
 
-	// Check if the region with the specified region_id exists
 	var region models.Region
 	if err := db.DB.First(&region, regionID).Error; err != nil {
-		c.JSON(400, gin.H{"error": "Region with the specified region_id does not exist"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Region with the specified region_id does not exist"})
 		return
 	}
 
-	// Region with the specified region_id exists, proceed to fetch all landmarks of the region
 	db.DB.Joins("JOIN cities ON landmarks.city_id = cities.id").
 		Where("cities.region_id = ?", regionID).
 		Find(&landmarks)
 
-	c.JSON(200, landmarks)
+	c.JSON(http.StatusOK, landmarks)
 }
