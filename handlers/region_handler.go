@@ -87,35 +87,30 @@ func SearchRegions(c *gin.Context) {
 }
 
 func FilterRegions(c *gin.Context) {
-	minPopulation := c.Query("min_population")
-	maxPopulation := c.Query("max_population")
-	minLatitude := c.Query("min_latitude")
-	maxLatitude := c.Query("max_latitude")
-	minLongitude := c.Query("min_longitude")
-	maxLongitude := c.Query("max_longitude")
-
 	var regions []models.Region
+
+	// Define the query parameters and their corresponding SQL clauses
+	params := map[string]string{
+		"min_population": "population >= ?",
+		"max_population": "population <= ?",
+	}
+
 	query := db.DB
-
-	if minPopulation != "" {
-		query = query.Where("population >= ?", minPopulation)
-	}
-	if maxPopulation != "" {
-		query = query.Where("population <= ?", maxPopulation)
-	}
-	if minLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) >= ?", minLatitude)
-	}
-	if maxLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) <= ?", maxLatitude)
-	}
-	if minLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) >= ?", minLongitude)
-	}
-	if maxLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) <= ?", maxLongitude)
+	for param, clause := range params {
+		if value := c.Query(param); value != "" {
+			query = query.Where(clause, value)
+		}
 	}
 
-	query.Find(&regions)
+	if err := query.Find(&regions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve regions"})
+		return
+	}
+
+	if len(regions) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No region found"})
+		return
+	}
+
 	c.JSON(http.StatusOK, regions)
 }

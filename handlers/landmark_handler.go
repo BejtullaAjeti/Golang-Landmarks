@@ -160,39 +160,25 @@ func SearchLandmarks(c *gin.Context) {
 
 func FilterLandmarks(c *gin.Context) {
 	var landmarks []models.Landmark
-	var err error
 
-	cityID := c.Query("city_id")
-	landmarkType := c.Query("type")
-	minLatitude := c.Query("min_latitude")
-	maxLatitude := c.Query("max_latitude")
-	minLongitude := c.Query("min_longitude")
-	maxLongitude := c.Query("max_longitude")
+	// Define the query parameters and their corresponding SQL clauses
+	params := map[string]string{
+		"city_id":       "city_id = ?",
+		"type":          "type = ?",
+		"min_latitude":  "CAST(latitude AS DECIMAL) >= ?",
+		"max_latitude":  "CAST(latitude AS DECIMAL) <= ?",
+		"min_longitude": "CAST(longitude AS DECIMAL) >= ?",
+		"max_longitude": "CAST(longitude AS DECIMAL) <= ?",
+	}
 
 	query := db.DB
-
-	if cityID != "" {
-		query = query.Where("city_id = ?", cityID)
-	}
-	if landmarkType != "" {
-		query = query.Where("type = ?", landmarkType)
-	}
-	if minLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) >= ?", minLatitude)
-	}
-	if maxLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) <= ?", maxLatitude)
-	}
-	if minLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) >= ?", minLongitude)
-	}
-	if maxLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) <= ?", maxLongitude)
+	for param, clause := range params {
+		if value := c.Query(param); value != "" {
+			query = query.Where(clause, value)
+		}
 	}
 
-	err = query.Find(&landmarks).Error
-
-	if err != nil {
+	if err := query.Find(&landmarks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve landmarks"})
 		return
 	}

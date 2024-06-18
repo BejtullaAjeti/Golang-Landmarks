@@ -202,3 +202,42 @@ func DeleteReview(c *gin.Context) {
 	db.DB.Delete(&review)
 	c.Status(http.StatusNoContent)
 }
+
+func SearchReviews(c *gin.Context) {
+	var reviews []models.Review
+	keyword := c.Query("keyword")
+	db.DB.Where("name LIKE ?", "%"+keyword+"%").
+		Or("comment LIKE ?", "%"+keyword+"%").
+		Or("rating LIKE ?", "%"+keyword+"%").
+		Find(&reviews)
+	c.JSON(http.StatusOK, reviews)
+}
+
+func FilterReviews(c *gin.Context) {
+	var reviews []models.Review
+
+	// Define the query parameters and their corresponding SQL clauses
+	params := map[string]string{
+		"min_rating": "rating >= ?",
+		"max_rating": "rating <= ?",
+	}
+
+	query := db.DB
+	for param, clause := range params {
+		if value := c.Query(param); value != "" {
+			query = query.Where(clause, value)
+		}
+	}
+
+	if err := query.Find(&reviews).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews"})
+		return
+	}
+
+	if len(reviews) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No review found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, reviews)
+}

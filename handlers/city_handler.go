@@ -103,39 +103,24 @@ func SearchCities(c *gin.Context) {
 
 func FilterCities(c *gin.Context) {
 	var cities []models.City
-	minPopulation := c.Query("min_population")
-	maxPopulation := c.Query("max_population")
-	minArea := c.Query("min_area")
-	maxArea := c.Query("max_area")
-	minLatitude := c.Query("min_latitude")
-	maxLatitude := c.Query("max_latitude")
-	minLongitude := c.Query("min_longitude")
-	maxLongitude := c.Query("max_longitude")
+
+	// Define the query parameters and their corresponding SQL clauses
+	params := map[string]string{
+		"min_population": "population >= ?",
+		"max_population": "population <= ?",
+		"min_area":       "area >= ?",
+		"max_area":       "area <= ?",
+		"min_latitude":   "CAST(latitude AS DECIMAL) >= ?",
+		"max_latitude":   "CAST(latitude AS DECIMAL) <= ?",
+		"min_longitude":  "CAST(longitude AS DECIMAL) >= ?",
+		"max_longitude":  "CAST(longitude AS DECIMAL) <= ?",
+	}
 
 	query := db.DB
-	if minPopulation != "" {
-		query = query.Where("population >= ?", minPopulation)
-	}
-	if maxPopulation != "" {
-		query = query.Where("population <= ?", maxPopulation)
-	}
-	if minArea != "" {
-		query = query.Where("area >= ?", minArea)
-	}
-	if maxArea != "" {
-		query = query.Where("area <= ?", maxArea)
-	}
-	if minLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) >= ?", minLatitude)
-	}
-	if maxLatitude != "" {
-		query = query.Where("CAST(latitude AS DECIMAL) <= ?", maxLatitude)
-	}
-	if minLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) >= ?", minLongitude)
-	}
-	if maxLongitude != "" {
-		query = query.Where("CAST(longitude AS DECIMAL) <= ?", maxLongitude)
+	for param, clause := range params {
+		if value := c.Query(param); value != "" {
+			query = query.Where(clause, value)
+		}
 	}
 
 	if err := query.Find(&cities).Error; err != nil {

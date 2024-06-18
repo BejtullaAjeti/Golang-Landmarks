@@ -1,10 +1,9 @@
 package routes
 
 import (
+	"github.com/gin-gonic/gin"
 	"landmarksmodule/handlers"
 	"log"
-
-	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes initializes routes for the API
@@ -53,6 +52,8 @@ func SetupRoutes() {
 	router.PUT("/reviews/:id", handlers.UpdateReview)
 	router.DELETE("/reviews/:id", handlers.DeleteReview)
 	router.GET("/reviews/user/:device_id", handlers.GetReviewsByDeviceID)
+	router.GET("/reviews/search", handlers.SearchReviews)
+	router.GET("/reviews/filter", handlers.FilterReviews)
 
 	// Start server
 	err := router.Run(":8080")
