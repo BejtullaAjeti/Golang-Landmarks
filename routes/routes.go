@@ -55,7 +55,7 @@ func SetupRoutes() {
 	router.GET("/reviews/filter", handlers.FilterReviews)
 
 	//GeoJson endpoints
-	router.POST("/geojson/:region_id", handlers.CreateGeoJSONInDB)
+	router.POST("/geojson/:id", handlers.CreateGeoJSONInDB)
 	router.GET("/geojson/:id", handlers.GetGeoJSONFromDB)
 
 	// Start server
