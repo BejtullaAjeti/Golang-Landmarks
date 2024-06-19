@@ -21,15 +21,23 @@ func CreateRegion(c *gin.Context) {
 	c.JSON(http.StatusCreated, region)
 }
 
-// GetRegions returns all regions
+// GetRegions returns all regions with associated GeoJSON if available
 func GetRegions(c *gin.Context) {
 	var regions []models.Region
 	db.DB.Find(&regions)
 
+	// Fetch GeoJSON for each region if available
+	for i := range regions {
+		geoJSON, err := db.GetGeoJSONByRegionID(regions[i].ID)
+		if err == nil && geoJSON != nil {
+			regions[i].GeoJSON = geoJSON.GeoJSONData
+		}
+	}
+
 	c.JSON(http.StatusOK, regions)
 }
 
-// GetRegionByID returns a region by ID
+// GetRegionByID returns a region by ID along with its GeoJSON data if available
 func GetRegionByID(c *gin.Context) {
 	var region models.Region
 	id := c.Param("id")
@@ -38,6 +46,12 @@ func GetRegionByID(c *gin.Context) {
 	if region.ID == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Region not found"})
 		return
+	}
+
+	// Fetch GeoJSON associated with the region
+	geoJSON, err := db.GetGeoJSONByRegionID(region.ID)
+	if err == nil && geoJSON != nil {
+		region.GeoJSON = geoJSON.GeoJSONData
 	}
 
 	c.JSON(http.StatusOK, region)

@@ -16,7 +16,6 @@ func SetupRoutes() {
 	router.GET("/regions/:id", handlers.GetRegionByID)
 	router.PUT("/regions/:id", handlers.UpdateRegion)
 	router.DELETE("/regions/:id", handlers.DeleteRegion)
-	router.POST("/regions/:id/geojsonfile", handlers.CreateGeoJSONFile)
 	router.GET("/regions/search", handlers.SearchRegions)
 	router.GET("/regions/filter", handlers.FilterRegions)
 
@@ -54,6 +53,10 @@ func SetupRoutes() {
 	router.GET("/reviews/user/:device_id", handlers.GetReviewsByDeviceID)
 	router.GET("/reviews/search", handlers.SearchReviews)
 	router.GET("/reviews/filter", handlers.FilterReviews)
+
+	//GeoJson endpoints
+	router.POST("/geojson/:region_id", handlers.CreateGeoJSONInDB)
+	router.GET("/geojson/:id", handlers.GetGeoJSONFromDB)
 
 	// Start server
 	err := router.Run(":8080")

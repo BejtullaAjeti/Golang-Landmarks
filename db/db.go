@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
 	"landmarksmodule/models"
@@ -25,8 +26,20 @@ func Init() {
 	migrate()
 }
 
+func GetGeoJSONByRegionID(regionID uint) (*models.GeoJSON, error) {
+	var geoJSON models.GeoJSON
+	result := DB.Where("region_id = ?", regionID).First(&geoJSON)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil // Return nil if no GeoJSON found
+		}
+		return nil, result.Error
+	}
+	return &geoJSON, nil
+}
+
 func migrate() {
-	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{}, &models.Review{})
+	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{}, &models.Review{}, &models.GeoJSON{})
 	DB.Model(&models.City{}).AddForeignKey("region_id", "regions(id)", "RESTRICT", "RESTRICT")
 	DB.Model(&models.Landmark{}).AddForeignKey("city_id", "cities(id)", "RESTRICT", "RESTRICT")
 	DB.Model(&models.Review{}).AddForeignKey("landmark_id", "landmarks(id)", "RESTRICT", "RESTRICT")
