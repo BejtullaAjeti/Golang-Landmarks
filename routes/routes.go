@@ -58,6 +58,19 @@ func SetupRoutes() {
 	router.POST("/geojson/:id", handlers.CreateGeoJSONInDB)
 	router.GET("/geojson/:id", handlers.GetGeoJSONFromDB)
 
+	//Photo endpoints
+	router.GET("/landmarkphotos", handlers.GetAllLandmarkPhotos)
+	router.GET("/landmarkphotos/:id", handlers.GetLandmarkPhotoByID)
+	router.POST("/landmarkphotos", handlers.CreateLandmarkPhoto)
+	router.PUT("/landmarkphotos/:id", handlers.UpdateLandmarkPhoto)
+	router.DELETE("/landmarkphotos/:id", handlers.DeleteLandmarkPhoto)
+
+	router.GET("/reviewphotos", handlers.GetAllReviewPhotos)
+	router.GET("/reviewphotos/:id", handlers.GetReviewPhotoByID)
+	router.POST("/reviewphotos", handlers.CreateReviewPhoto)
+	router.PUT("/reviewphotos/:id", handlers.UpdateReviewPhoto)
+	router.DELETE("/reviewphotos/:id", handlers.DeleteReviewPhoto)
+
 	// Start server
 	err := router.Run(":8080")
 	if err != nil {

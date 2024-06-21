@@ -39,7 +39,7 @@ func GetGeoJSONByRegionID(regionID uint) (*models.GeoJSON, error) {
 }
 
 func migrate() {
-	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{}, &models.Review{}, &models.GeoJSON{})
+	DB.AutoMigrate(&models.Region{}, &models.City{}, &models.Landmark{}, &models.Review{}, &models.GeoJSON{}, &models.LandmarkPhoto{}, &models.ReviewPhoto{})
 	DB.Model(&models.City{}).AddForeignKey("region_id", "regions(id)", "RESTRICT", "RESTRICT")
 	DB.Model(&models.Landmark{}).AddForeignKey("city_id", "cities(id)", "RESTRICT", "RESTRICT")
 	DB.Model(&models.Review{}).AddForeignKey("landmark_id", "landmarks(id)", "RESTRICT", "RESTRICT")
