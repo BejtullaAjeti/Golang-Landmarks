@@ -28,22 +28,10 @@ func CreateLandmarkPhoto(c *gin.Context) {
 		return
 	}
 
-	// Count the number of photos already associated with the landmark
-	var photoCount int64
-	db.DB.Model(&models.LandmarkPhoto{}).Where("landmark_id = ?", landmark.ID).Count(&photoCount)
-	photoCount++ // Increment to get the next number
-
-	// Create a unique file name based on landmark ID, name, and photo count
+	// Create a unique file name based on landmark ID and name
 	landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
-	// Create a directory for the landmark if it doesn't exist
-	dirPath := filepath.Join("uploads", landmarkName)
-	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create directory for landmark"})
-		return
-	}
-
-	fileName := fmt.Sprintf("%s%d%s", landmarkName, photoCount, filepath.Ext(file.Filename))
-	filePath := filepath.Join(dirPath, fileName)
+	fileName := fmt.Sprintf("%d_%s%s", landmark.ID, landmarkName, filepath.Ext(file.Filename))
+	filePath := filepath.Join("uploads", fileName)
 
 	// Save the file to the disk
 	if err := c.SaveUploadedFile(file, filePath); err != nil {

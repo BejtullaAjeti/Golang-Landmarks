@@ -1,45 +1,71 @@
 package handlers
 
 import (
-	"encoding/base64"
-	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"net/http"
-	"strings"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-// CreateReviewPhoto creates a new review photo
+// CreateReviewPhoto handles the upload and storage of review photos
 func CreateReviewPhoto(c *gin.Context) {
-	var input models.ReviewPhoto
-	if err := c.BindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review photo data"})
+	deviceID := c.PostForm("device_id")
+	var review models.Review
+	if err := db.DB.First(&review, c.PostForm("review_id")).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Review with the specified review_id does not exist"})
 		return
 	}
 
-	// Decode base64 image data
-	imageData, err := decodeBase64Image(input.Image)
+	file, err := c.FormFile("image")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid photo data"})
 		return
 	}
 
-	input.Image = imageData
+	// Count the number of photos already associated with the review
+	var photoCount int64
+	db.DB.Model(&models.ReviewPhoto{}).Where("review_id = ?", review.ID).Count(&photoCount)
+	photoCount++ // Increment to get the next number
 
-	if err := db.DB.Create(&input).Error; err != nil {
+	// Create a unique file name based on review ID, name, and photo count
+	dirPath := filepath.Join("review_uploads", deviceID)
+	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create directory for review"})
+		return
+	}
+
+	fileName := fmt.Sprintf("%d_%d%s", review.ID, photoCount, filepath.Ext(file.Filename))
+	filePath := filepath.Join(dirPath, fileName)
+
+	// Save the file to the disk
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
+		return
+	}
+
+	// Create a new ReviewPhoto record
+	photo := models.ReviewPhoto{
+		ReviewID:  review.ID,
+		Name:      file.Filename,
+		Path:      filePath,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := db.DB.Create(&photo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review photo"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, input)
+	c.JSON(http.StatusCreated, photo)
 }
 
-// GetAllReviewPhotos retrieves all review photos
 func GetAllReviewPhotos(c *gin.Context) {
 	var photos []models.ReviewPhoto
-
 	if err := db.DB.Find(&photos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve review photos"})
 		return
@@ -48,11 +74,9 @@ func GetAllReviewPhotos(c *gin.Context) {
 	c.JSON(http.StatusOK, photos)
 }
 
-// GetReviewPhotoByID retrieves a review photo by ID
 func GetReviewPhotoByID(c *gin.Context) {
-	var photo models.ReviewPhoto
 	id := c.Param("id")
-
+	var photo models.ReviewPhoto
 	if err := db.DB.First(&photo, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Review photo not found"})
 		return
@@ -61,10 +85,9 @@ func GetReviewPhotoByID(c *gin.Context) {
 	c.JSON(http.StatusOK, photo)
 }
 
-// UpdateReviewPhoto updates a review photo by ID
 func UpdateReviewPhoto(c *gin.Context) {
-	var photo models.ReviewPhoto
 	id := c.Param("id")
+	var photo models.ReviewPhoto
 
 	if err := db.DB.First(&photo, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Review photo not found"})
@@ -73,19 +96,14 @@ func UpdateReviewPhoto(c *gin.Context) {
 
 	var input models.ReviewPhoto
 	if err := c.BindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review photo data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid photo data"})
 		return
 	}
 
-	// Decode base64 image data if provided
-	if input.Image != "" {
-		imageData, err := decodeBase64Image(input.Image)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		photo.Image = imageData
-	}
+	// Update fields
+	photo.Name = input.Name
+	photo.Path = input.Path
+	photo.UpdatedAt = time.Now()
 
 	if err := db.DB.Save(&photo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review photo"})
@@ -95,10 +113,9 @@ func UpdateReviewPhoto(c *gin.Context) {
 	c.JSON(http.StatusOK, photo)
 }
 
-// DeleteReviewPhoto deletes a review photo by ID
 func DeleteReviewPhoto(c *gin.Context) {
-	var photo models.ReviewPhoto
 	id := c.Param("id")
+	var photo models.ReviewPhoto
 
 	if err := db.DB.First(&photo, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Review photo not found"})
@@ -110,21 +127,11 @@ func DeleteReviewPhoto(c *gin.Context) {
 		return
 	}
 
+	// Optionally, delete the file from the disk
+	if err := os.Remove(photo.Path); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete photo file"})
+		return
+	}
+
 	c.Status(http.StatusNoContent)
-}
-
-// Helper function to decode base64 image data
-func decodeBase64Image(encodedImage string) (string, error) {
-	parts := strings.Split(encodedImage, ",")
-	if len(parts) != 2 {
-		return "", errors.New("invalid base64 image data")
-	}
-
-	// Read base64 encoded image data
-	decoded, err := base64.StdEncoding.DecodeString(parts[1])
-	if err != nil {
-		return "", fmt.Errorf("base64 decoding error: %v", err)
-	}
-
-	return string(decoded), nil
 }
