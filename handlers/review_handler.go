@@ -3,139 +3,43 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"io"
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
-	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
-// CreateReview handles creating a new review with attached photos
+// CreateReview handles creating a new review
 func CreateReview(c *gin.Context) {
-	var input struct {
-		models.Review
-		Photos []models.ReviewPhoto `json:"photos"`
+	var input models.Review
+
+	// Parse JSON input
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
+		return
 	}
 
-	// Check if content type is JSON
-	if c.Request.Header.Get("Content-Type") == "application/json" {
-		if err := c.BindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
-			return
-		}
-	} else {
-		// Handle form-data
-		input.DeviceID = c.PostForm("device_id")
-		input.Name = c.PostForm("name")
-		input.Comment = c.PostForm("comment")
-		rating, err := strconv.Atoi(c.PostForm("rating"))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid rating"})
-			return
-		}
-		input.Rating = rating
+	// Validate review data
+	if err := validateReview(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-		landmarkID, err := strconv.ParseUint(c.PostForm("landmark_id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid landmark ID"})
-			return
-		}
-		input.LandmarkID = uint(landmarkID)
-
-		// Retrieve landmark details from the database
-		var landmark models.Landmark
-		if err := db.DB.First(&landmark, input.LandmarkID).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark with the specified landmark_id does not exist"})
-			return
-		}
-
-		// Use landmark name for directory and filename generation
-		landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
-		if landmarkName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark name is required"})
-			return
-		}
-
-		// Handle photos
-		var photos []models.ReviewPhoto
-		formFiles := c.Request.MultipartForm.File["photos"]
-		for _, fileHeader := range formFiles {
-			file, err := fileHeader.Open()
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open photo file"})
-				return
-			}
-			defer file.Close()
-
-			// Create directories for photos if not exists
-			photoFolder := filepath.Join("review_photos", input.DeviceID, landmarkName)
-			if err := os.MkdirAll(photoFolder, os.ModePerm); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create photo directory"})
-				return
-			}
-
-			// Generate a unique file name
-			fileName := fmt.Sprintf("%s_%d%s", landmarkName, time.Now().UnixNano(), filepath.Ext(fileHeader.Filename))
-			filePath := filepath.Join(photoFolder, fileName)
-
-			// Check if file with the same name exists and generate a new name if it does
-			for fileExistsReview(filePath) {
-				fileName = fmt.Sprintf("%s_%d%s", landmarkName, time.Now().UnixNano(), filepath.Ext(fileHeader.Filename))
-				filePath = filepath.Join(photoFolder, fileName)
-			}
-
-			// Save file to disk
-			if err := c.SaveUploadedFile(fileHeader, filePath); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
-				return
-			}
-
-			// Create ReviewPhoto record
-			photo := models.ReviewPhoto{
-				ReviewID:  input.Review.ID,
-				Name:      fileHeader.Filename,
-				Path:      filePath,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			}
-			photos = append(photos, photo)
-		}
-		input.Photos = photos
+	// Check if landmark exists
+	if err := checkLandmarkExists(input.LandmarkID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Create the review
-	if err := db.DB.Create(&input.Review).Error; err != nil {
+	if err := db.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review"})
 		return
 	}
 
-	// Create review photos
-	for i, photo := range input.Photos {
-		photo.ReviewID = input.Review.ID
-		if err := db.DB.Create(&photo).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review photo"})
-			return
-		}
-		// Update the input.Photos slice with the created photo data
-		input.Photos[i] = photo
-	}
-
-	// Update the input struct with the created photos and respond with the review data
-	input.Review.Photos = input.Photos
-	c.JSON(http.StatusCreated, input.Review)
-}
-
-// fileExists checks if a file exists at the given path
-func fileExistsReview(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
+	c.JSON(http.StatusCreated, input)
 }
 
 // validateReview validates the review data
@@ -145,6 +49,9 @@ func validateReview(review *models.Review) error {
 	}
 	if review.DeviceID == "" {
 		return fmt.Errorf("device ID cannot be empty")
+	}
+	if review.Name == "" {
+		return fmt.Errorf("name cannot be empty")
 	}
 	return nil
 }
@@ -285,97 +192,26 @@ func GetReviewsByDeviceID(c *gin.Context) {
 
 // UpdateReview updates a review by ID
 func UpdateReview(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review ID"})
+	id := c.Param("id")
+	var review models.Review
+
+	if err := db.DB.First(&review, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
 		return
 	}
 
-	var input models.Review
-
-	// Check if content type is JSON
-	if c.Request.Header.Get("Content-Type") == "application/json" {
-		if err := c.BindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
-			return
-		}
-	} else {
-		// Handle form-data
-		input.DeviceID = c.PostForm("device_id")
-		input.Name = c.PostForm("name")
-		input.Comment = c.PostForm("comment")
-		rating, err := strconv.Atoi(c.PostForm("rating"))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid rating"})
-			return
-		}
-		input.Rating = rating
-
-		landmarkID, err := strconv.ParseUint(c.PostForm("landmark_id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid landmark ID"})
-			return
-		}
-		input.LandmarkID = uint(landmarkID)
-	}
-
-	// Validate review data
-	if err := validateReview(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&review); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON data"})
 		return
 	}
 
-	// Check if review exists
-	var existingReview models.Review
-	if err := db.DB.First(&existingReview, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
-			return
-		}
+	// Save updated landmark data
+	if err := db.DB.Save(&review).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review"})
 		return
 	}
 
-	// Update review fields
-	existingReview.DeviceID = input.DeviceID
-	existingReview.Name = input.Name
-	existingReview.Comment = input.Comment
-	existingReview.Rating = input.Rating
-	existingReview.LandmarkID = input.LandmarkID
-
-	if err := db.DB.Save(&existingReview).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review"})
-		return
-	}
-
-	c.JSON(http.StatusOK, existingReview)
-}
-
-// extractLandmarkNameFromPath extracts the landmark name from the given photo path
-func extractLandmarkNameFromPath(photoPath string) string {
-	parts := strings.Split(photoPath, string(filepath.Separator))
-	if len(parts) < 3 {
-		return ""
-	}
-	return parts[len(parts)-2]
-}
-
-// copyFile copies a file from src to dst
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destinationFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destinationFile.Close()
-
-	_, err = io.Copy(destinationFile, sourceFile)
-	return err
+	c.JSON(http.StatusOK, review)
 }
 
 // DeleteReview deletes a review by ID

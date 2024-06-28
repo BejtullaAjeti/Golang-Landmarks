@@ -1,105 +1,26 @@
 package handlers
 
 import (
-	"fmt"
+	"github.com/gin-gonic/gin"
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
-// CreateLandmark handles creating a new landmark with attached photos
+// CreateLandmark handles creating a new landmark without photos
 func CreateLandmark(c *gin.Context) {
-	var input struct {
-		models.Landmark
-		Photos []models.LandmarkPhoto `json:"photos"`
-	}
+	var input models.Landmark
 
 	// Check if content type is JSON
 	if c.Request.Header.Get("Content-Type") == "application/json" {
-		if err := c.BindJSON(&input); err != nil {
+		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid landmark data"})
 			return
 		}
 	} else {
-		// Handle form-data
-		input.Name = c.PostForm("name")
-		input.Type = c.PostForm("type")
-		input.Information = c.PostForm("information")
-		input.Description = c.PostForm("description")
-		input.Latitude = c.PostForm("latitude")
-		input.Longitude = c.PostForm("longitude")
-
-		cityID, err := strconv.ParseUint(c.PostForm("city_id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid city ID"})
-			return
-		}
-		input.CityID = uint(cityID)
-
-		// Handle photos
-		var photos []models.LandmarkPhoto
-		formFiles := c.Request.MultipartForm.File["photos"]
-		for _, fileHeader := range formFiles {
-			file, err := fileHeader.Open()
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open photo file"})
-				return
-			}
-			defer file.Close()
-
-			// Count the number of photos already associated with the landmark
-			var existingPhotoCount int64
-			if err := db.DB.Model(&models.LandmarkPhoto{}).Where("landmark_id = ?", input.Landmark.ID).Count(&existingPhotoCount).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count photos for landmark"})
-				return
-			}
-
-			// Increment to get the next number
-			photoCount := existingPhotoCount + 1
-
-			// Create directory for photos if not exists
-			landmarkName := strings.ReplaceAll(input.Landmark.Name, " ", "_")
-			dirPath := filepath.Join("uploads", landmarkName)
-			if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create directory for landmark"})
-				return
-			}
-
-			// Generate a unique file name
-			fileName := fmt.Sprintf("%s%d%s", landmarkName, photoCount, filepath.Ext(fileHeader.Filename))
-			filePath := filepath.Join(dirPath, fileName)
-
-			// Check if file with the same name exists and generate a new name if it does
-			for fileExists(filePath) {
-				photoCount++
-				fileName = fmt.Sprintf("%s%d%s", landmarkName, photoCount, filepath.Ext(fileHeader.Filename))
-				filePath = filepath.Join(dirPath, fileName)
-			}
-
-			// Save file to disk
-			if err := c.SaveUploadedFile(fileHeader, filePath); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
-				return
-			}
-
-			// Create LandmarkPhoto record
-			photo := models.LandmarkPhoto{
-				Name:      fileHeader.Filename,
-				Path:      filePath,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			}
-			photos = append(photos, photo)
-		}
-		input.Photos = photos
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Content-Type must be application/json"})
+		return
 	}
 
 	// Validate city existence
@@ -110,31 +31,12 @@ func CreateLandmark(c *gin.Context) {
 	}
 
 	// Create the landmark
-	if err := db.DB.Create(&input.Landmark).Error; err != nil {
+	if err := db.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create landmark"})
 		return
 	}
 
-	// Create landmark photos
-	for i, photo := range input.Photos {
-		photo.LandmarkID = input.Landmark.ID
-		if err := db.DB.Create(&photo).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create landmark photo"})
-			return
-		}
-		// Update the input.Photos slice with the created photo data
-		input.Photos[i] = photo
-	}
-
-	// Update the input struct with the created photos and respond with the landmark data
-	input.Landmark.Photos = input.Photos
-	c.JSON(http.StatusCreated, input.Landmark)
-}
-
-// fileExists checks if a file exists at the given path
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
+	c.JSON(http.StatusCreated, input)
 }
 
 // GetLandmarks retrieves all landmarks including their photos
@@ -237,30 +139,13 @@ func UpdateLandmark(c *gin.Context) {
 		return
 	}
 
-	// Bind updated landmark data from JSON request body or form-data
-	if c.Request.Header.Get("Content-Type") == "application/json" {
-		if err := c.BindJSON(&landmark); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON data"})
-			return
-		}
-	} else {
-		// Handle form-data
-		landmark.Name = c.PostForm("name")
-		landmark.Type = c.PostForm("type")
-		landmark.Information = c.PostForm("information")
-		landmark.Description = c.PostForm("description")
-		landmark.Latitude = c.PostForm("latitude")
-		landmark.Longitude = c.PostForm("longitude")
-
-		cityID, err := strconv.ParseUint(c.PostForm("city_id"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid city ID"})
-			return
-		}
-		landmark.CityID = uint(cityID)
+	// Bind updated landmark data from JSON request body
+	if err := c.ShouldBindJSON(&landmark); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON data"})
+		return
 	}
 
-	// Check if the city exists
+	// Validate city existence
 	var city models.City
 	if err := db.DB.First(&city, landmark.CityID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "City with the specified city_id does not exist"})

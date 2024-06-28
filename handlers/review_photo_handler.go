@@ -2,21 +2,34 @@ package handlers
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"golang.org/x/net/context"
 	"landmarksmodule/db"
 	"landmarksmodule/models"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// CreateReviewPhoto handles the upload and storage of review photos
+func init() {
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		panic(fmt.Sprintf("unable to load SDK config, %v", err))
+	}
+	s3Client = s3.NewFromConfig(cfg)
+}
+
+// CreateReviewPhoto handles the upload and storage of review photos to S3
 func CreateReviewPhoto(c *gin.Context) {
-	deviceID := c.PostForm("device_id")
+	reviewID := c.PostForm("review_id")
 	var review models.Review
-	if err := db.DB.First(&review, c.PostForm("review_id")).Error; err != nil {
+	if err := db.DB.First(&review, reviewID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Review with the specified review_id does not exist"})
 		return
 	}
@@ -27,32 +40,44 @@ func CreateReviewPhoto(c *gin.Context) {
 		return
 	}
 
-	// Count the number of photos already associated with the review
-	var photoCount int64
-	db.DB.Model(&models.ReviewPhoto{}).Where("review_id = ?", review.ID).Count(&photoCount)
-	photoCount++ // Increment to get the next number
+	// Read the file into memory
+	fileBytes, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read photo file"})
+		return
+	}
+	defer func(fileBytes multipart.File) {
+		err := fileBytes.Close()
+		if err != nil {
+		}
+	}(fileBytes)
 
-	// Create a unique file name based on review ID, name, and photo count
-	dirPath := filepath.Join("review_uploads", deviceID)
-	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create directory for review"})
+	var landmark models.Landmark
+	if err := db.DB.First(&landmark, review.LandmarkID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark associated with the review not found"})
+		return
+	}
+	// Generate a unique file name based on landmark name and current time
+	deviceId := strings.ReplaceAll(review.DeviceID, " ", "_")
+	landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
+	fileName := fmt.Sprintf("%s_%s_%d%s", deviceId, landmarkName, time.Now().UnixNano(), filepath.Ext(file.Filename))
+
+	// Upload file to S3 with directory structure
+	uploadPath := fmt.Sprintf("%s/%s/%s", deviceId, landmarkName, fileName)
+	uploadErr := uploadFileToS3(fileBytes, uploadPath)
+	if uploadErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo to S3"})
 		return
 	}
 
-	fileName := fmt.Sprintf("%d_%d%s", review.ID, photoCount, filepath.Ext(file.Filename))
-	filePath := filepath.Join(dirPath, fileName)
+	// Construct the S3 URL for the uploaded file
+	s3URL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", "golang-backend-photos", uploadPath)
 
-	// Save the file to the disk
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
-		return
-	}
-
-	// Create a new ReviewPhoto record
+	// Create a new LandmarkPhoto record
 	photo := models.ReviewPhoto{
 		ReviewID:  review.ID,
 		Name:      file.Filename,
-		Path:      filePath,
+		Path:      s3URL,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

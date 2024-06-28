@@ -1,19 +1,36 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"landmarksmodule/db"
 	"landmarksmodule/models"
+	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 )
 
-// CreateLandmarkPhoto handles the upload and storage of landmark photos
+var s3Client *s3.Client
+
+func init() {
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		panic(fmt.Sprintf("unable to load SDK config, %v", err))
+	}
+	s3Client = s3.NewFromConfig(cfg)
+}
+
+// CreateLandmarkPhoto handles the upload and storage of landmark photos to S3
 func CreateLandmarkPhoto(c *gin.Context) {
 	landmarkID := c.PostForm("landmark_id")
 	var landmark models.Landmark
@@ -28,22 +45,38 @@ func CreateLandmarkPhoto(c *gin.Context) {
 		return
 	}
 
-	// Create a unique file name based on landmark ID and name
-	landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
-	fileName := fmt.Sprintf("%d_%s%s", landmark.ID, landmarkName, filepath.Ext(file.Filename))
-	filePath := filepath.Join("uploads", fileName)
-
-	// Save the file to the disk
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
+	// Read the file into memory
+	fileBytes, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read photo file"})
 		return
 	}
+	defer func(fileBytes multipart.File) {
+		err := fileBytes.Close()
+		if err != nil {
+		}
+	}(fileBytes)
+
+	// Generate a unique file name based on landmark name and current time
+	landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
+	fileName := fmt.Sprintf("%s_%d%s", landmarkName, time.Now().UnixNano(), filepath.Ext(file.Filename))
+
+	// Upload file to S3 with directory structure
+	uploadPath := fmt.Sprintf("%s/%s", landmarkName, fileName)
+	uploadErr := uploadFileToS3(fileBytes, uploadPath)
+	if uploadErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo to S3"})
+		return
+	}
+
+	// Construct the S3 URL for the uploaded file
+	s3URL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", "golang-backend-photos", uploadPath)
 
 	// Create a new LandmarkPhoto record
 	photo := models.LandmarkPhoto{
 		LandmarkID: landmark.ID,
 		Name:       file.Filename,
-		Path:       filePath,
+		Path:       s3URL,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -55,6 +88,35 @@ func CreateLandmarkPhoto(c *gin.Context) {
 	c.JSON(http.StatusCreated, photo)
 }
 
+// uploadFileToS3 uploads a file to S3 and returns an error if any
+func uploadFileToS3(file multipart.File, fileName string) error {
+	buffer := new(bytes.Buffer)
+	if _, err := buffer.ReadFrom(file); err != nil {
+		return fmt.Errorf("failed to read file: %v", err)
+	}
+	fileBytes := buffer.Bytes()
+	fileType := http.DetectContentType(fileBytes)
+
+	contentLength := int64(len(fileBytes))
+
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String("golang-backend-photos"),
+		Key:           aws.String(fileName),
+		Body:          bytes.NewReader(fileBytes),
+		ContentLength: &contentLength,
+		ContentType:   aws.String(fileType),
+	}
+
+	// Attempt to upload file to S3
+	_, err := s3Client.PutObject(context.TODO(), input)
+	if err != nil {
+		// Log the error for debugging purposes
+		log.Printf("Failed to upload file %s to S3: %v", fileName, err)
+		return fmt.Errorf("failed to upload file to S3: %v", err)
+	}
+
+	return nil
+}
 func GetAllLandmarkPhotos(c *gin.Context) {
 	var photos []models.LandmarkPhoto
 	if err := db.DB.Find(&photos).Error; err != nil {
