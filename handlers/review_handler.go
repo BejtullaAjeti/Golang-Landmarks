@@ -65,20 +65,35 @@ func checkLandmarkExists(landmarkID uint) error {
 	return nil
 }
 
-// GetReviews retrieves all reviews including their photos
 func GetReviews(c *gin.Context) {
 	var reviews []models.Review
 
-	// Preload photos for each review
-	if err := db.DB.Preload("Photos").Find(&reviews).Error; err != nil {
+	// Retrieve reviews from the database
+	if err := db.DB.Find(&reviews).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews"})
 		return
+	}
+
+	// Populate PhotoLinks for each review
+	for i := range reviews {
+		var photos []models.ReviewPhoto
+		if err := db.DB.Where("review_id = ?", reviews[i].ID).Find(&photos).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+			return
+		}
+
+		var photoLinks []string
+		for _, photo := range photos {
+			photoLinks = append(photoLinks, photo.Path)
+		}
+
+		reviews[i].Photos = nil // Clear Photos field
+		reviews[i].PhotoLinks = photoLinks
 	}
 
 	c.JSON(http.StatusOK, reviews)
 }
 
-// GetReviewByID returns a review by ID
 func GetReviewByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -87,7 +102,7 @@ func GetReviewByID(c *gin.Context) {
 	}
 
 	var review models.Review
-	if err := db.DB.Preload("Photos").First(&review, id).Error; err != nil {
+	if err := db.DB.First(&review, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
 			return
@@ -95,6 +110,20 @@ func GetReviewByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve review"})
 		return
 	}
+
+	var photos []models.ReviewPhoto
+	if err := db.DB.Where("review_id = ?", review.ID).Find(&photos).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+		return
+	}
+
+	var photoLinks []string
+	for _, photo := range photos {
+		photoLinks = append(photoLinks, photo.Path)
+	}
+
+	review.Photos = nil // Clear Photos field
+	review.PhotoLinks = photoLinks
 
 	c.JSON(http.StatusOK, review)
 }

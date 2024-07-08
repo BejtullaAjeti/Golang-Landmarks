@@ -39,14 +39,30 @@ func CreateLandmark(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
-// GetLandmarks retrieves all landmarks including their photos
 func GetLandmarks(c *gin.Context) {
 	var landmarks []models.Landmark
 
-	// Preload photos for each landmark
-	if err := db.DB.Preload("Photos").Find(&landmarks).Error; err != nil {
+	// Retrieve landmarks from the database
+	if err := db.DB.Find(&landmarks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve landmarks"})
 		return
+	}
+
+	// Populate PhotoLinks and omit Photos
+	for i := range landmarks {
+		var photos []models.LandmarkPhoto
+		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Find(&photos).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
+			return
+		}
+
+		var photoLinks []string
+		for _, photo := range photos {
+			photoLinks = append(photoLinks, photo.Path)
+		}
+
+		landmarks[i].Photos = nil // Clear Photos field
+		landmarks[i].PhotoLinks = photoLinks
 	}
 
 	c.JSON(http.StatusOK, landmarks)
@@ -56,11 +72,25 @@ func GetLandmarkByID(c *gin.Context) {
 	var landmark models.Landmark
 	id := c.Param("id")
 	log.Printf("Fetching landmark with ID: %s", id)
-	if err := db.DB.Preload("Photos").First(&landmark, id).Error; err != nil {
+	if err := db.DB.First(&landmark, id).Error; err != nil {
 		log.Println("Landmark not found or an error occurred:", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Landmark not found"})
 		return
 	}
+
+	var photos []models.LandmarkPhoto
+	if err := db.DB.Where("landmark_id = ?", landmark.ID).Find(&photos).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
+		return
+	}
+
+	var photoLinks []string
+	for _, photo := range photos {
+		photoLinks = append(photoLinks, photo.Path)
+	}
+
+	landmark.Photos = nil // Clear Photos field
+	landmark.PhotoLinks = photoLinks
 
 	c.JSON(http.StatusOK, landmark)
 }

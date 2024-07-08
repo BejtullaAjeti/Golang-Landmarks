@@ -160,3 +160,24 @@ func DeleteReviewPhoto(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+func GetReviewPhotosByReviewID(c *gin.Context) {
+	reviewID := c.Param("id")
+
+	var photos []models.ReviewPhoto
+	if err := db.DB.Where("review_id = ?", reviewID).Find(&photos).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve review photos"})
+		return
+	}
+
+	if len(photos) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No photos found for the specified review"})
+		return
+	}
+
+	photoLinks := make([]string, len(photos))
+	for i, photo := range photos {
+		photoLinks[i] = photo.Path
+	}
+
+	c.JSON(http.StatusOK, gin.H{"photo_links": photoLinks})
+}

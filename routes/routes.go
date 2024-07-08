@@ -42,7 +42,8 @@ func SetupRoutes() {
 	router.GET("/landmarks/search", handlers.SearchLandmarks)
 	router.GET("/landmarks/filter", handlers.FilterLandmarks)
 	router.GET("/landmarks/city/:city_id", handlers.GetAllLandmarksOfCity)
-	router.GET("landmarks/region/:region_id", handlers.GetAllLandmarksOfRegion)
+	router.GET("/landmarks/region/:region_id", handlers.GetAllLandmarksOfRegion)
+	router.GET("/landmarks/:id/photos", handlers.GetLandmarkPhotosByLandmarkID)
 
 	//Review endpoints
 	router.GET("/reviews", handlers.GetReviews)
@@ -53,9 +54,12 @@ func SetupRoutes() {
 	router.GET("/reviews/user/:device_id", handlers.GetReviewsByDeviceID)
 	router.GET("/reviews/search", handlers.SearchReviews)
 	router.GET("/reviews/filter", handlers.FilterReviews)
+	router.GET("/reviews/:id/photos", handlers.GetReviewPhotosByReviewID)
 
 	//GeoJson endpoints
-	router.POST("/geojson/:id", handlers.CreateGeoJSONInDB)
+	router.GET("/geojson", handlers.GetAllGeoJSON)
+	router.POST("/geojson", handlers.CreateGeoJSON)
+	router.PUT("/geojson/:id", handlers.UpdateGeoJSON)
 	router.GET("/geojson/:id", handlers.GetGeoJSONFromDB)
 
 	//Photo endpoints

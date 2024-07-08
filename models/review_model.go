@@ -14,5 +14,6 @@ type Review struct {
 	Comment    string        `gorm:"type:text" json:"comment"`
 	Rating     int           `gorm:"not null;check:rating >= 1 AND rating <= 5" json:"rating"`
 	LandmarkID uint          `gorm:"foreignkey:LandmarkID" json:"landmark_id"`
-	Photos     []ReviewPhoto `gorm:"foreignkey:ReviewID" json:"photos"`
+	Photos     []ReviewPhoto `gorm:"foreignkey:ReviewID" json:"-"`
+	PhotoLinks []string      `gorm:"-" json:"photo_links"`
 }

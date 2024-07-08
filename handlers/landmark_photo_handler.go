@@ -188,3 +188,24 @@ func DeleteLandmarkPhoto(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+func GetLandmarkPhotosByLandmarkID(c *gin.Context) {
+	landmarkID := c.Param("id")
+
+	var photos []models.LandmarkPhoto
+	if err := db.DB.Where("landmark_id = ?", landmarkID).Find(&photos).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve landmark photos"})
+		return
+	}
+
+	if len(photos) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No photos found for the specified landmark"})
+		return
+	}
+
+	photoLinks := make([]string, len(photos))
+	for i, photo := range photos {
+		photoLinks[i] = photo.Path
+	}
+
+	c.JSON(http.StatusOK, gin.H{"photo_links": photoLinks})
+}
