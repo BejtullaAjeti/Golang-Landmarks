@@ -103,7 +103,7 @@ func uploadFileToS3(file multipart.File, fileName string) error {
 		Bucket:        aws.String("golang-backend-photos"),
 		Key:           aws.String(fileName),
 		Body:          bytes.NewReader(fileBytes),
-		ContentLength: &contentLength,
+		ContentLength: aws.Int64(contentLength), // Ensure contentLength is an int64
 		ContentType:   aws.String(fileType),
 	}
 
