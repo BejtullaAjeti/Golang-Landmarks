@@ -97,13 +97,14 @@ func uploadFileToS3(file multipart.File, fileName string) error {
 	fileBytes := buffer.Bytes()
 	fileType := http.DetectContentType(fileBytes)
 
+	// Calculate content length
 	contentLength := int64(len(fileBytes))
 
 	input := &s3.PutObjectInput{
 		Bucket:        aws.String("golang-backend-photos"),
 		Key:           aws.String(fileName),
 		Body:          bytes.NewReader(fileBytes),
-		ContentLength: aws.Int64(contentLength), // Ensure contentLength is an int64
+		ContentLength: &contentLength, // Direct assignment of int64
 		ContentType:   aws.String(fileType),
 	}
 
@@ -117,6 +118,7 @@ func uploadFileToS3(file multipart.File, fileName string) error {
 
 	return nil
 }
+
 func GetAllLandmarkPhotos(c *gin.Context) {
 	var photos []models.LandmarkPhoto
 	if err := db.DB.Find(&photos).Error; err != nil {
