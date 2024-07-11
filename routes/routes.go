@@ -47,7 +47,8 @@ func SetupRoutes() {
 
 	//Review endpoints
 	router.GET("/reviews", handlers.GetReviews)
-	router.POST("/reviews", handlers.CreateReview)
+	router.POST("/reviewJSON", handlers.CreateReview)
+	router.POST("/reviews", handlers.CreateReviewWithPhotos)
 	router.GET("/reviews/:id", handlers.GetReviewByID)
 	router.PUT("/reviews/:id", handlers.UpdateReview)
 	router.DELETE("/reviews/:id", handlers.DeleteReview)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -8,7 +9,10 @@ import (
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // CreateReview handles creating a new review
@@ -37,6 +41,95 @@ func CreateReview(c *gin.Context) {
 	if err := db.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review"})
 		return
+	}
+
+	c.JSON(http.StatusCreated, input)
+}
+
+func CreateReviewWithPhotos(c *gin.Context) {
+	// Extract JSON part from the form data
+	reviewJSON := c.PostForm("review")
+	var input models.Review
+
+	// Parse JSON input for review
+	if err := json.Unmarshal([]byte(reviewJSON), &input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review data"})
+		return
+	}
+
+	// Validate review data
+	if err := validateReview(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if landmark exists
+	if err := checkLandmarkExists(input.LandmarkID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Create the review
+	if err := db.DB.Create(&input).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review"})
+		return
+	}
+
+	// Process photos if any
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid form data"})
+		return
+	}
+
+	files := form.File["photos"]
+	if files != nil {
+		for _, file := range files {
+			// Read the file into memory
+			fileBytes, err := file.Open()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read photo file"})
+				return
+			}
+
+			var landmark models.Landmark
+			if err := db.DB.First(&landmark, input.LandmarkID).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Landmark associated with the review not found"})
+				return
+			}
+
+			// Generate a unique file name based on landmark name and current time
+			deviceId := strings.ReplaceAll(input.DeviceID, " ", "_")
+			landmarkName := strings.ReplaceAll(landmark.Name, " ", "_")
+			fileName := fmt.Sprintf("%s_%s_%d%s", deviceId, landmarkName, time.Now().UnixNano(), filepath.Ext(file.Filename))
+
+			// Upload file to S3 with directory structure
+			uploadPath := fmt.Sprintf("%s/%s/%s", deviceId, landmarkName, fileName)
+			uploadErr := uploadFileToS3(fileBytes, uploadPath)
+			if uploadErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo to S3"})
+				return
+			}
+			err = fileBytes.Close()
+			if err != nil {
+				return
+			}
+			// Construct the S3 URL for the uploaded file
+			s3URL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", "golang-backend-photos", uploadPath)
+
+			// Create a new ReviewPhoto record
+			photo := models.ReviewPhoto{
+				ReviewID:  input.ID,
+				Name:      file.Filename,
+				Path:      s3URL,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := db.DB.Create(&photo).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create review photo"})
+				return
+			}
+		}
 	}
 
 	c.JSON(http.StatusCreated, input)

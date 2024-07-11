@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -9,7 +10,6 @@ import (
 	"landmarksmodule/models"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -119,16 +119,35 @@ func UpdateReviewPhoto(c *gin.Context) {
 		return
 	}
 
-	var input models.ReviewPhoto
-	if err := c.BindJSON(&input); err != nil {
+	// Check if a new file is uploaded
+	file, err := c.FormFile("image")
+	if err != nil && !errors.Is(err, http.ErrMissingFile) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid photo data"})
 		return
 	}
 
-	// Update fields
-	photo.Name = input.Name
-	photo.Path = input.Path
-	photo.UpdatedAt = time.Now()
+	if file != nil {
+		// Read the new file into memory
+		fileBytes, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read photo file"})
+			return
+		}
+
+		// Upload the new file to S3 with the same path
+		uploadPath := strings.TrimPrefix(photo.Path, fmt.Sprintf("https://%s.s3.amazonaws.com/", "golang-backend-photos"))
+		uploadErr := uploadFileToS3(fileBytes, uploadPath)
+		if uploadErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo to S3"})
+			return
+		}
+		err = fileBytes.Close()
+		if err != nil {
+			return
+		}
+
+		photo.UpdatedAt = time.Now()
+	}
 
 	if err := db.DB.Save(&photo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review photo"})
@@ -151,13 +170,6 @@ func DeleteReviewPhoto(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete review photo"})
 		return
 	}
-
-	// Optionally, delete the file from the disk
-	if err := os.Remove(photo.Path); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete photo file"})
-		return
-	}
-
 	c.Status(http.StatusNoContent)
 }
 func GetReviewPhotosByReviewID(c *gin.Context) {
