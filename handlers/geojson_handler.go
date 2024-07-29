@@ -163,13 +163,28 @@ func UpdateGeoJSON(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"geojson_id": existingGeoJSON.ID})
 }
 
+const TimeFormat = "2006-01-02T15:04:05Z07:00"
+
 func GetGeoJSONFromDB(c *gin.Context) {
 	regionID := c.Param("id")
 
 	var geoJSONRecord models.GeoJSON
-	if err := db.DB.Where("id = ?", regionID).First(&geoJSONRecord).Error; err != nil {
+
+	// Retrieve the GeoJSON record from the database
+	if err := db.DB.Where("region_id = ?", regionID).First(&geoJSONRecord).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "GeoJSON not found"})
 		return
+	}
+
+	// Parse the If-Modified-Since header from the request
+	ifModifiedSince := c.GetHeader("If-Modified-Since")
+	if ifModifiedSince != "" {
+		parsedIfModifiedSince, err := time.Parse(TimeFormat, ifModifiedSince)
+		if err == nil && !geoJSONRecord.UpdatedAt.After(parsedIfModifiedSince) {
+			// Resource has not been modified since the date in If-Modified-Since header
+			c.Status(http.StatusNotModified)
+			return
+		}
 	}
 
 	var geoJSONData map[string]interface{}
@@ -178,6 +193,14 @@ func GetGeoJSONFromDB(c *gin.Context) {
 		return
 	}
 
-	// Respond with the GeoJSON data
-	c.JSON(http.StatusOK, geoJSONData)
+	response := gin.H{
+		"geojson_data": geoJSONData,
+		"created_at":   geoJSONRecord.CreatedAt,
+	}
+
+	// Set the Last-Modified header in the response
+	c.Header("Last-Modified", geoJSONRecord.UpdatedAt.UTC().Format(TimeFormat))
+
+	// Respond with the GeoJSON data and created_at
+	c.JSON(http.StatusOK, response)
 }
