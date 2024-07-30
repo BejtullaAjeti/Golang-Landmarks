@@ -323,6 +323,21 @@ func GetReviewsByDeviceID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews"})
 		return
 	}
+	for i := range reviews {
+		var photos []models.ReviewPhoto
+		if err := db.DB.Where("review_id = ?", reviews[i].ID).Find(&photos).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+			return
+		}
+
+		var photoLinks []string
+		for _, photo := range photos {
+			photoLinks = append(photoLinks, photo.Path)
+		}
+
+		reviews[i].Photos = nil // Clear Photos field
+		reviews[i].PhotoLinks = photoLinks
+	}
 
 	c.JSON(http.StatusOK, reviews)
 }
