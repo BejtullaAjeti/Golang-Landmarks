@@ -159,6 +159,13 @@ func UpdateGeoJSON(c *gin.Context) {
 		return
 	}
 
+	// Update the region's updatedAt timestamp
+	region.UpdatedAt = time.Now()
+	if err := db.DB.Save(&region).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update region's updatedAt in database"})
+		return
+	}
+
 	// Respond with the GeoJSON record ID
 	c.JSON(http.StatusOK, gin.H{"geojson_id": existingGeoJSON.ID})
 }
