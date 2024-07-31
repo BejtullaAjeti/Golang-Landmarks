@@ -5,6 +5,7 @@ import (
 	"landmarksmodule/db"
 	"landmarksmodule/models"
 	"net/http"
+	"strconv"
 )
 
 // GetCountries retrieves all countries and their regions
@@ -78,13 +79,28 @@ func GetCountryByID(c *gin.Context) {
 	c.JSON(http.StatusOK, country)
 }
 
-// GetCountryByLatLong retrieves a country by its latitude and longitude
 func GetCountryByLatLong(c *gin.Context) {
-	latitude := c.Query("latitude")
-	longitude := c.Query("longitude")
+	latitude, err1 := strconv.ParseFloat(c.Query("latitude"), 64)
+	longitude, err2 := strconv.ParseFloat(c.Query("longitude"), 64)
+
+	if err1 != nil || err2 != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid latitude or longitude"})
+		return
+	}
 
 	var country models.Country
-	if err := db.DB.Where("latitude = ? AND longitude = ?", latitude, longitude).First(&country).Error; err != nil {
+	query := `
+		SELECT *,
+		       (6371 * acos(cos(radians(?)) *
+		                    cos(radians(latitude)) *
+		                    cos(radians(longitude) - radians(?)) +
+		                    sin(radians(?)) *
+		                    sin(radians(latitude)))) AS distance
+		FROM countries
+		ORDER BY distance
+		LIMIT 1`
+
+	if err := db.DB.Raw(query, latitude, longitude, latitude).Scan(&country).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Country not found", "details": err.Error()})
 		return
 	}
@@ -94,6 +110,7 @@ func GetCountryByLatLong(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve regions for country", "details": err.Error()})
 		return
 	}
+
 	for i := range regions {
 		geoJSON, err := db.GetGeoJSONByRegionID(regions[i].ID)
 		if err == nil && geoJSON != nil {
