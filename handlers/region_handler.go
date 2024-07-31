@@ -128,3 +128,29 @@ func FilterRegions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, regions)
 }
+
+func AddRegionsToCountry(c *gin.Context) {
+	var input struct {
+		CountryID uint   `json:"country_id"`
+		RegionIDs []uint `json:"region_ids"`
+	}
+
+	if err := c.BindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
+		return
+	}
+
+	if input.CountryID == 0 || len(input.RegionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Country ID and Region IDs must be provided"})
+		return
+	}
+
+	if err := db.DB.Model(&models.Region{}).
+		Where("id IN (?)", input.RegionIDs).
+		Update("country_id", input.CountryID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update regions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Regions updated successfully"})
+}

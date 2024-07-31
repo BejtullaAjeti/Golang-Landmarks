@@ -9,6 +9,7 @@ type Region struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
+	CountryID  uint       `gorm:"foreignkey:CountryID" json:"country_id"`
 	Name       string     `json:"name"`
 	Area       float64    `json:"area"`
 	Population int        `json:"population"`

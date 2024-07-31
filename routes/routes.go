@@ -10,6 +10,14 @@ import (
 func SetupRoutes() {
 	router := gin.Default()
 
+	//Country endpoints
+	router.GET("/countries", handlers.GetCountries)
+	router.GET("/countries/:id", handlers.GetCountryByID)
+	router.GET("countries/lookup", handlers.GetCountryByLatLong)
+	router.POST("/countries", handlers.CreateCountry)
+	router.PUT("/countries/:id", handlers.UpdateCountry)
+	router.DELETE("/countries/:id", handlers.DeleteCountry)
+
 	// Regions endpoints
 	router.GET("/regions", handlers.GetRegions)
 	router.POST("/regions", handlers.CreateRegion)
@@ -18,6 +26,7 @@ func SetupRoutes() {
 	router.DELETE("/regions/:id", handlers.DeleteRegion)
 	router.GET("/regions/search", handlers.SearchRegions)
 	router.GET("/regions/filter", handlers.FilterRegions)
+	router.POST("/regions/country", handlers.AddRegionsToCountry)
 
 	// Cities endpoints
 	router.GET("/cities", handlers.GetCities)
