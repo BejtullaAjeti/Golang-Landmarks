@@ -68,7 +68,7 @@ func SetupRoutes() {
 
 	//GeoJson endpoints
 	router.GET("/geojson", handlers.GetAllGeoJSON)
-	router.POST("/geojson", handlers.CreateGeoJSON)
+	router.POST("/geojson/:region_id", handlers.CreateGeoJSON)
 	router.PUT("/geojson/:id", handlers.UpdateGeoJSON)
 	router.GET("/geojson/:id", handlers.GetGeoJSONFromDB)
 

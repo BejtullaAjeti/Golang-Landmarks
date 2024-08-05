@@ -12,7 +12,7 @@ import (
 
 func CreateGeoJSON(c *gin.Context) {
 	var region models.Region
-	id := c.Param("id")
+	id := c.Param("region_id")
 
 	// Retrieve the region from the database
 	if err := db.DB.First(&region, id).Error; err != nil {
