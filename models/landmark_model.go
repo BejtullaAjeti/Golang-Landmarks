@@ -18,4 +18,5 @@ type Landmark struct {
 	CityID      uint            `gorm:"foreignkey:CityID" json:"city_id"`
 	Photos      []LandmarkPhoto `gorm:"foreignkey:LandmarkID" json:"-"`
 	PhotoLinks  []string        `gorm:"-" json:"photo_links"`
+	Reviews     []Review        `gorm:"foreignkey:LandmarkID" json:"reviews,omitempty"`
 }

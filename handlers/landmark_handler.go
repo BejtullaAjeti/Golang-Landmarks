@@ -50,6 +50,7 @@ func GetLandmarks(c *gin.Context) {
 
 	// Populate PhotoLinks and omit Photos
 	for i := range landmarks {
+		// Retrieve photos
 		var photos []models.LandmarkPhoto
 		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Find(&photos).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
@@ -60,9 +61,34 @@ func GetLandmarks(c *gin.Context) {
 		for _, photo := range photos {
 			photoLinks = append(photoLinks, photo.Path)
 		}
-
 		landmarks[i].Photos = nil // Clear Photos field
 		landmarks[i].PhotoLinks = photoLinks
+
+		// Retrieve top 10 reviews
+		var reviews []models.Review
+		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Order("created_at desc").Limit(10).Find(&reviews).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews for landmark"})
+			return
+		}
+
+		// For each review, populate PhotoLinks and omit Photos
+		for j := range reviews {
+			var reviewPhotos []models.ReviewPhoto
+			if err := db.DB.Where("review_id = ?", reviews[j].ID).Find(&reviewPhotos).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+				return
+			}
+
+			var reviewPhotoLinks []string
+			for _, photo := range reviewPhotos {
+				reviewPhotoLinks = append(reviewPhotoLinks, photo.Path)
+			}
+			reviews[j].Photos = nil // Clear Photos field
+			reviews[j].PhotoLinks = reviewPhotoLinks
+		}
+
+		// Add reviews to the landmark
+		landmarks[i].Reviews = reviews
 	}
 
 	c.JSON(http.StatusOK, landmarks)
