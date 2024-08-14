@@ -6,6 +6,7 @@ import (
 	"landmarksmodule/models"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 // CreateLandmark handles creating a new landmark without photos
@@ -50,7 +51,6 @@ func GetLandmarks(c *gin.Context) {
 
 	// Populate PhotoLinks and omit Photos
 	for i := range landmarks {
-		// Retrieve photos
 		var photos []models.LandmarkPhoto
 		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Find(&photos).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
@@ -61,34 +61,9 @@ func GetLandmarks(c *gin.Context) {
 		for _, photo := range photos {
 			photoLinks = append(photoLinks, photo.Path)
 		}
+
 		landmarks[i].Photos = nil // Clear Photos field
 		landmarks[i].PhotoLinks = photoLinks
-
-		// Retrieve top 10 reviews
-		var reviews []models.Review
-		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Order("created_at desc").Limit(10).Find(&reviews).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews for landmark"})
-			return
-		}
-
-		// For each review, populate PhotoLinks and omit Photos
-		for j := range reviews {
-			var reviewPhotos []models.ReviewPhoto
-			if err := db.DB.Where("review_id = ?", reviews[j].ID).Find(&reviewPhotos).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
-				return
-			}
-
-			var reviewPhotoLinks []string
-			for _, photo := range reviewPhotos {
-				reviewPhotoLinks = append(reviewPhotoLinks, photo.Path)
-			}
-			reviews[j].Photos = nil // Clear Photos field
-			reviews[j].PhotoLinks = reviewPhotoLinks
-		}
-
-		// Add reviews to the landmark
-		landmarks[i].Reviews = reviews
 	}
 
 	c.JSON(http.StatusOK, landmarks)
@@ -104,6 +79,7 @@ func GetLandmarkByID(c *gin.Context) {
 		return
 	}
 
+	// Retrieve photos for the landmark
 	var photos []models.LandmarkPhoto
 	if err := db.DB.Where("landmark_id = ?", landmark.ID).Find(&photos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
@@ -117,6 +93,41 @@ func GetLandmarkByID(c *gin.Context) {
 
 	landmark.Photos = nil // Clear Photos field
 	landmark.PhotoLinks = photoLinks
+
+	// Get the limit for reviews from the query parameter, default to 10 if not provided
+	limitQuery := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitQuery)
+	if err != nil || limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit query parameter"})
+		return
+	}
+
+	// Retrieve reviews for the landmark with the specified limit
+	var reviews []models.Review
+	if err := db.DB.Where("landmark_id = ?", landmark.ID).Order("created_at desc").Limit(limit).Find(&reviews).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews for landmark"})
+		return
+	}
+
+	// Populate PhotoLinks for each review
+	for i := range reviews {
+		var reviewPhotos []models.ReviewPhoto
+		if err := db.DB.Where("review_id = ?", reviews[i].ID).Find(&reviewPhotos).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+			return
+		}
+
+		var reviewPhotoLinks []string
+		for _, photo := range reviewPhotos {
+			reviewPhotoLinks = append(reviewPhotoLinks, photo.Path)
+		}
+
+		reviews[i].Photos = nil // Clear Photos field
+		reviews[i].PhotoLinks = reviewPhotoLinks
+	}
+
+	// Add the reviews to the landmark
+	landmark.Reviews = reviews
 
 	c.JSON(http.StatusOK, landmark)
 }
