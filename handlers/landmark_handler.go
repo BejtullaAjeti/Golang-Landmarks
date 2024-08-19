@@ -49,6 +49,9 @@ func GetLandmarks(c *gin.Context) {
 		return
 	}
 
+	// Check if the 'reviews' query parameter is present
+	includeReviews := c.Query("reviews") != ""
+
 	// Populate PhotoLinks and omit Photos
 	for i := range landmarks {
 		var photos []models.LandmarkPhoto
@@ -64,6 +67,35 @@ func GetLandmarks(c *gin.Context) {
 
 		landmarks[i].Photos = nil // Clear Photos field
 		landmarks[i].PhotoLinks = photoLinks
+
+		// Retrieve reviews only if 'reviews' query parameter is present
+		if includeReviews {
+			// Retrieve top 10 reviews
+			var reviews []models.Review
+			if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Order("created_at desc").Limit(10).Find(&reviews).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve reviews for landmark"})
+				return
+			}
+
+			// For each review, populate PhotoLinks and omit Photos
+			for j := range reviews {
+				var reviewPhotos []models.ReviewPhoto
+				if err := db.DB.Where("review_id = ?", reviews[j].ID).Find(&reviewPhotos).Error; err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for review"})
+					return
+				}
+
+				var reviewPhotoLinks []string
+				for _, photo := range reviewPhotos {
+					reviewPhotoLinks = append(reviewPhotoLinks, photo.Path)
+				}
+				reviews[j].Photos = nil // Clear Photos field
+				reviews[j].PhotoLinks = reviewPhotoLinks
+			}
+
+			// Add reviews to the landmark
+			landmarks[i].Reviews = reviews
+		}
 	}
 
 	c.JSON(http.StatusOK, landmarks)
@@ -314,6 +346,72 @@ func GetAllLandmarksOfRegion(c *gin.Context) {
 	db.DB.Joins("JOIN cities ON landmarks.city_id = cities.id").
 		Where("cities.region_id = ?", regionID).
 		Find(&landmarks)
+
+	c.JSON(http.StatusOK, landmarks)
+}
+func GetSuggestedLandmarks(c *gin.Context) {
+	// Parse user location from query parameters
+	latitudeStr := c.Query("latitude")
+	longitudeStr := c.Query("longitude")
+	if latitudeStr == "" || longitudeStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User location (latitude and longitude) must be provided"})
+		return
+	}
+
+	latitude, err := strconv.ParseFloat(latitudeStr, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid latitude value"})
+		return
+	}
+
+	longitude, err := strconv.ParseFloat(longitudeStr, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid longitude value"})
+		return
+	}
+
+	maxDistance := 20.0 // distance in km
+
+	// Retrieve landmarks that are within the maxDistance, ordered by proximity, rating, and review count
+	var landmarks []models.Landmark
+	if err := db.DB.Raw(`
+		SELECT 
+			l.*, 
+			AVG(r.rating) as average_rating, 
+			COUNT(r.id) as review_count,
+			(6371 * acos(cos(radians(?)) * cos(radians(l.latitude)) * cos(radians(l.longitude) - radians(?)) + sin(radians(?)) * sin(radians(l.latitude)))) as distance
+		FROM 
+			landmarks l
+		LEFT JOIN 
+			reviews r ON l.id = r.landmark_id
+		GROUP BY 
+			l.id
+		HAVING 
+			distance <= ?
+		ORDER BY 
+			distance ASC, average_rating DESC, review_count DESC
+	`, latitude, longitude, latitude, maxDistance).Scan(&landmarks).Error; err != nil {
+		log.Println("Failed to retrieve suggested landmarks:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve suggested landmarks"})
+		return
+	}
+
+	// Populate PhotoLinks for each landmark
+	for i := range landmarks {
+		var photos []models.LandmarkPhoto
+		if err := db.DB.Where("landmark_id = ?", landmarks[i].ID).Find(&photos).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve photos for landmark"})
+			return
+		}
+
+		var photoLinks []string
+		for _, photo := range photos {
+			photoLinks = append(photoLinks, photo.Path)
+		}
+
+		landmarks[i].Photos = nil // Clear Photos field
+		landmarks[i].PhotoLinks = photoLinks
+	}
 
 	c.JSON(http.StatusOK, landmarks)
 }

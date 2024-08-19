@@ -53,6 +53,7 @@ func SetupRoutes() {
 	router.GET("/landmarks/city/:city_id", handlers.GetAllLandmarksOfCity)
 	router.GET("/landmarks/region/:region_id", handlers.GetAllLandmarksOfRegion)
 	router.GET("/landmarks/:id/photos", handlers.GetLandmarkPhotosByLandmarkID)
+	router.GET("/landmarks/suggested", handlers.GetSuggestedLandmarks)
 
 	//Review endpoints
 	router.GET("/reviews", handlers.GetReviews)
